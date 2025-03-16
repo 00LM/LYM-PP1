@@ -153,6 +153,18 @@ TOKEN: /*Istrucciones*/
 		|  	  ( <BALLOONS>   "," f=num() {world.grabBalloons(f);salida="Command:  Pick balloons";})	 
 
 	}
+	
+	void parseIf() : {
+	    Node condition;
+	    Node thenBlock;
+	    Node elseBlock = null;
+	} {
+	    <IF> condition = parseCondition() <THEN> thenBlock = parseBlock()
+	    [ <ELSE> elseBlock = parseBlock() ]
+	    {
+	        System.out.println("If detected with condition: " + condition);
+	    }
+	}
 
 	
 	
