@@ -7,6 +7,9 @@ Agregadas producciones para manejar globos
 Modificado por Silvia Takahashi
 
 
+Realizado por:
+Luisa Mora e Isabella Ortiz.
+
  **/
 
 
@@ -67,17 +70,23 @@ class ListTokenManager extends RobotTokenManager {
 	        this.tokens = tokens;
 	    }
 	
-	    @Override
-	    public Token getNextToken() {
-	        if (index < tokens.size()) {
-	            return tokens.get(index++);
-	        } else {
-	            Token eof = new Token();
-	            eof.kind = 0; 
-	            return eof;
-	        }
+	    private Token eof = null;
+
+		@Override
+		public Token getNextToken() {
+		    if (index < tokens.size()) {
+		        return tokens.get(index++);
+		    }
+		    
+		    if (eof == null) {
+		        eof = new Token();
+		        eof.kind = 0;
+		    }
+		    
+		    return eof;
+		}
+
 	    }
-	}
 
 PARSER_END(Robot)
 
@@ -169,6 +178,11 @@ TOKEN :
 {
   < IDENTIFIER: ["a"-"z", "A"-"Z"] (["a"-"z", "A"-"Z", "0"-"9"])* >
   | < NUM: (["0"-"9"])+  >
+}
+
+TOKEN : {
+    <AND_PREFIXED : "and" < IDENTIFIER > ":" >
+  |  <WITH_PREFIXED : "with" < IDENTIFIER > ":">
 }
 
 
@@ -274,12 +288,13 @@ TOKEN :
 	        {
 	            parametrosH.add(param); 
 	        }
-	        ((
-		        ("with:" | "and:") param = <IDENTIFIER>.image
+	        
+	        (
+		        ( < WITH_PREFIXED > | < AND_PREFIXED >) param = <IDENTIFIER>.image
 		        {
 		            parametrosH.add(param); 
 		        }
-	        ))*
+	        )*
 	    )?
 	    {System.out.println("Lista de parámetros: " + parametrosH);}
 	    parseDefBlock(nombreFuncion)
@@ -288,37 +303,45 @@ TOKEN :
 
 
 	void parseDefBlock(String nombreFuncion):
-	{String num = "";
-	ArrayList<Token> tokens = new ArrayList<>();}
-	{ "["
 	{
-        Token t;
-        while (true) {
-            t = getNextToken();
-            if (t.image == " [") break;  
-            tokens.add(t);
-        }
-        funciones.put(nombreFuncion, tokens);
-    }
-	(	parseGoto(false)
-	| anteparseMove(false)
-	| parseTurn(false) 
-	| parseFace(false) 
-	| parsePut(false)
-	| parsePick(false) 
-	| anteparseJump(false) 
-	| parseNop(false) 	/*| < IF > parseIf()
-	| < WHILE > parseWhile()
-	| < FOR > parseFor()*/
-	| < BALLOONS >
-	| < CHIPS >
-	| parseVariable() (parseAsignacion())+
+	    String num = "";
+	    ArrayList<Token> tokens = new ArrayList<>();
+	    Token savedToken = token; 
+	}
+	{
+	    "[" 
+	    {
+	        Token t = savedToken.next; 
+	        while (t != null && t.kind != 0) {  
+	            if (t.image.equals("]")) break;  
+	            tokens.add(t);  
+	            t = t.next;
+	        }
+	        funciones.put(nombreFuncion, tokens);
+	    }  
+	
+	(
+	    parseGoto(false)
+	    | anteparseMove(false)
+	    | parseTurn(false) 
+	    | parseFace(false) 
+	    | parsePut(false)
+	    | parsePick(false) 
+	    | anteparseJump(false) 
+	    | parseNop(false) 
+	    | < BALLOONS >
+	    | < CHIPS >
+	    | parseVariable() (parseAsignacion())+
+	    | parseWhile(false, nombreFuncion)
 	)+
 	"]"
-	{ variablesH.clear(); parametrosH.clear();
-	System.out.println("Las variables y los parametros han sido reiniciados.");
+	{
+	    variablesH.clear();
+	    parametrosH.clear();
+	    System.out.println("Las variables y los parámetros han sido reiniciados.");
 	}
 	}
+
 
 	void parseCodeBlock():
 	{}
@@ -338,12 +361,63 @@ TOKEN :
 	| < BALLOONS >
 	| < CHIPS >
 	| parseVariable() (parseAsignacion())+
+	| parseHashKey()
 	)+
 	"]"
 	{ variablesH.clear(); parametrosH.clear();
 	System.out.println("Las variables y los parametros han sido reiniciados.");
 	}
 	}
+
+
+	void parseHashKey():
+	{String key = "";}
+	{
+	  key = < IDENTIFIER >.image
+		{
+		  if (!funciones.contains(key)) {
+			throw new ParseException("La funcion " + key + " no ha sido definida.");
+		    }
+		  else
+		  { verificarTokens(key);}
+		}
+	}
+
+	void verificarTokens(String nombreFuncion):
+	{}
+	{
+		{
+		  
+	    ArrayList<Token> tokensEsperados = funciones.get(nombreFuncion);
+	    
+	    if (tokensEsperados == null) {
+	        throw new ParseException("Error: No se encontró la función '" + nombreFuncion + "' en el hash.");
+	    }
+	
+	    int index = 0;
+	    Token t = getNextToken(); 
+	
+	    while (t.kind != 0 && !t.image.equals(".")) {  
+	        if (index >= tokensEsperados.size()) {
+	            throw new ParseException("Error: Más tokens de los esperados en '" + nombreFuncion + "'.");
+	        }
+	
+	        Token esperado = tokensEsperados.get(index);
+	
+	        if (!t.image.equals(esperado.image)) {
+	            throw new ParseException("Error: Se esperaba '" + esperado.image + "' pero se encontró '" + t.image + "'.");
+	        }
+	
+	        index++;
+	        t = getNextToken(); 
+	    }
+	
+	    if (index < tokensEsperados.size()) {
+	        throw new ParseException("Error: Faltan tokens en la ejecución de '" + nombreFuncion + "'.");
+	    }
+	  	}
+	}
+	
 
 	String identifier():
 	{
@@ -881,75 +955,151 @@ TOKEN :
 	  }
 	}
 
-	void parseCondition(boolean ejecucion, boolean isWhile, String nomFuncion) :
+	boolean parseCondition(boolean ejecucion, boolean isWhile, String nomFuncion) :
 	{
+	  	Point position;
 	    String tok1 = "";
 	    String num = "";
 	    int condInt = 0;
+	    int numint = 0;
 	}
 	{
 	    <FACING> ":" (tok1 = <NORTH>.image | tok1 =<SOUTH>.image | tok1 =<EAST>.image | tok1 =<WEST>.image) "."
 	    {
-	      	if (ejecucion) { 
-	      	condInt = 1;
-	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
+	      	if (ejecucion) {
+				if (facingToInt(tok1) != world.getFacing()) {
+					return false;
+				  }
+				 else { return true; }
+	      	}
 	    }
 	    
 	   /////
 	  | <CANPUT> ":" ( num = < NUM >.image | num = identifier() { validarParam(num); } ) "ofType:" (tok1 = <BALLOONS>.image | tok1 = <CHIPS>.image) "."
 	    {
-	      	if (ejecucion) { 
-	        condInt = 2;
-	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
+	      	numint = Integer.parseInt(num);
+	      	if (ejecucion) {
+				if ((tok1.equals("#balloons") && world.getMyBalloons() >= numint) && !(world.isBlocked(world.getPosition()))) {
+					return true;
+				  }
+				else if ((tok1.equals("#chips") && world.getMyChips() >= numint) && !(world.isBlocked(world.getPosition()))) {
+					return true;
+				  }
+				else {
+				  return false;
+				  }
+	      	}
 	    }
 	   /////
 	  | <CANPICK> ":" ( num = < NUM >.image | num = identifier() { validarParam(num); } ) "ofType:" (tok1 = <BALLOONS>.image | tok1 = <CHIPS>.image) "."
 	    {
-			if (ejecucion) { 
-	        condInt = 3;
-	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
+			numint = Integer.parseInt(num);
+	      	if (ejecucion) {
+				if ((tok1.equals("#balloons") && world.countBalloons(world.getPosition())) >= numint && !(world.isBlocked(world.getPosition()))) {
+					return true;
+				  }
+				else if ((tok1.equals("#balloons") && world.chipsToPick() >= numint) && !(world.isBlocked(world.getPosition()))) {
+					return true;
+				  }
+				else {
+				  return false;
+				  }
+	      	}
 	    }
 	  /////
 	  | <CANMOVE> ":" ( num = < NUM >.image | num = identifier() { validarParam(num); } )
 	  ( "inDir:" (tok1 = <NORTH>.image |tok1 = <SOUTH>.image |tok1 = <EAST>.image |tok1 = <WEST>.image) | "toThe:" (tok1 = <FRONT>.image |tok1 = <BACK>.image |tok1 = <LEFT>.image |tok1 = <RIGHT>.image) ) "."
 	    {
-	      	if (ejecucion) { 
-	        condInt = 4;
-	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
-	    }
-	  /////
-	  | <CANJUMP> ":" ( num = < NUM >.image | num = identifier() { validarParam(num); } )
-	  ( "inDir:" (tok1 = <NORTH>.image |tok1 = <SOUTH>.image |tok1 = <EAST>.image |tok1 = <WEST>.image) | "toThe:" (tok1 = <FRONT>.image |tok1 = <BACK>.image |tok1 = <LEFT>.image |tok1 = <RIGHT>.image) ) "."
-	    {
-	      	if (ejecucion) { 
-	        condInt = 5;
-	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
-	    }
-	   ////
-	  | <NOT> ":"
-		  {
-		    parseCondition(ejecucion, isWhile, nomFuncion);
-		  }
+			numint = Integer.parseInt(num);
+			if (ejecucion) {
+				if (tok1.equals("#north") | tok1.equals("#front")) {
+				  for (int i = 0; i < numint; i++) {
+    				boolean disponible = world.isBlocked(new Point(world.getPosition().x+i,world.getPosition().y));
+    				if (!disponible) {
+    				  return false;}
+    				else {return true;}
+					}
+					
+				  }
+				else if (tok1.equals("#south") | tok1.equals("#back")) {
+				  for (int i = 0; i < numint; i++) {
+    				boolean disponible = world.isBlocked(new Point(world.getPosition().x-i,world.getPosition().y));
+    				if (!disponible) {
+    				  return false;}
+    				else {return true;}
+					}
+					
+				  }
+				else if (tok1.equals("#east") | tok1.equals("#right") ) {
+				  for (int i = 0; i < numint; i++) {
+    				boolean disponible = world.isBlocked(new Point(world.getPosition().x,world.getPosition().y+i));
+    				if (!disponible) {
+    				  return false;}
+    				else {return true;}
+					}
+					
+				  }
+				else if (tok1.equals("#west") | tok1.equals("#left")) {
+				  for (int i = 0; i < numint; i++) {
+    				boolean disponible = world.isBlocked(new Point(world.getPosition().x+i,world.getPosition().y-i));
+    				if (!disponible) {
+    				  return false;}
+    				else {return true;}
+					}
+					
+				  }
+				
+        	}
+   		}
+
+    | <CANJUMP> ":" (num = <NUM>.image | num = identifier() { validarParam(num); }) 
+      ("inDir:" (tok1 = <NORTH>.image | tok1 = <SOUTH>.image | tok1 = <EAST>.image | tok1 = <WEST>.image) | 
+       "toThe:" (tok1 = <FRONT>.image | tok1 = <BACK>.image | tok1 = <LEFT>.image | tok1 = <RIGHT>.image)) "."
+    	{
+        	numint = Integer.parseInt(num);
+			if (ejecucion) {
+				if (tok1.equals("#north") | tok1.equals("#front")) {
+				  	return world.isBlocked(new Point(world.getPosition().x+numint,world.getPosition().y));
+				  }
+				else if (tok1.equals("#south") | tok1.equals("#back")) {
+				  	return world.isBlocked(new Point(world.getPosition().x-numint,world.getPosition().y));
+				}
+				else if (tok1.equals("#east") | tok1.equals("#right") ) {
+				  return world.isBlocked(new Point(world.getPosition().x,world.getPosition().y+numint));
+				  }
+				else if (tok1.equals("#west") | tok1.equals("#left")) {
+    				return world.isBlocked(new Point(world.getPosition().x,world.getPosition().y-numint));
+				  }
+    	}
+   		}
+
+    | <NOT> ":" {
+        return !parseCondition(ejecucion, isWhile, nomFuncion);
+    	}
 	}
 
-	void execConditional(String tok1, String num, int condInt, boolean isWhile, String nomFuncion):
-	{}
-	{
-	  {
-	    if (num.equals("") && condInt == 1) { //es facing
-			if (facingToInt(tok1) == world.getFacing()) {
-				if (isWhile) {
-					parseWhile(true, nomFuncion);
-				  }
-			}
-	    }
-	 }
-	}
+
 
 	void parseWhile(boolean ejecucion, String nombreFuncion):
-	{}
+	{Token startToken;
+	boolean condicion; }
 	{
-		< WHILE > ":" {parseCondition(ejecucion, true, nombreFuncion);} "do:" { parseDefBlock(nombreFuncion);}
+		< WHILE > ":"
+		{ if (ejecucion) { 
+		  startToken = getToken(1);
+		   }
+		   parseCondition(ejecucion, true, nombreFuncion);
+		}
+		"do:" { if (ejecucion) { 
+				while (condicion) {  
+                ReInit(startToken); 
+                condicion = parseCondition(ejecucion, true, nombreFuncion); 
+                if (!condicion) break;
+                parseCodeBlock(); }
+                
+            	}
+				else { parseCondition(ejecucion, true, nombreFuncion); }
+            	}
 	}
 
 	void callFunction():
