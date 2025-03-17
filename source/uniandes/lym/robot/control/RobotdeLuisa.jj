@@ -1,0 +1,499 @@
+/*
+Gramatica para el Robot:
+Autor: Alejandro Arango
+Modificado por: Silvia Takahashi
+Modificado por: Juan Pablo Morales.
+Agregadas producciones para manejar globos
+Modificado por Silvia Takahashi
+
+
+ **/
+
+
+options 
+{
+  
+	LOOKAHEAD=1; 
+	IGNORE_CASE=true;
+	STATIC = false;
+	
+}
+   
+
+PARSER_BEGIN(Robot)
+
+package uniandes.lym.robot.control;
+
+import uniandes.lym.robot.kernel.*;
+import uniandes.lym.robot.view.Console;
+ 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.awt.Point;
+import java.io.*;
+import java.util.Vector;
+import java.util.LinkedList;
+import java.util.List;
+
+
+@SuppressWarnings("serial")
+public class Robot 
+{
+
+
+	private RobotWorldDec world;
+	private static Map<String,String > variables = new HashMap<String,String >();
+	
+	
+	void setWorld(RobotWorld w) {
+		world = (RobotWorldDec) w;	
+	}
+
+	String salida=new String();
+}
+PARSER_END(Robot)
+
+SKIP:
+{
+	" "
+	|	"\r"
+	|	"\t"
+	| "\n"
+}
+
+
+
+TOKEN:
+{
+		<BALLOONS:  "#BALLOONS" >
+		|	<CHIPS:     "#CHIPS"  >	
+
+}
+
+TOKEN:
+{
+  < PROC: "proc" >
+| < LOWER: ["a"-"z"] >
+| < LETTER: ["A"-"Z"] | ["a"-"z"] >
+}
+
+TOKEN : 
+{
+  < IDENTIFIER: ["a"-"z", "A"-"Z"] (["a"-"z", "A"-"Z", "0"-"9"])* >
+  | < NUM: (["1"-"9"] ["0"-"9"])+ | "0" >
+}
+
+
+
+
+
+TOKEN [IGNORE_CASE]:
+{
+< THEN : "THEN" >
+| < ELSE  : "ELSE" >
+| < DO : "DO" >
+| < OD : "OD" >
+| < REP : "REP" >
+| < PER : "PER" >
+| < TIMES: "TIMES" >
+
+}
+
+TOKEN: /*Istrucciones*/
+{
+	< GOTO : "goto">
+| < MOVE : "move">
+| < TURN : "turn">
+| < FACE : "face">
+| < PUT : "put">
+| < PICK : "pick">
+| < JUMP : "jump">
+| < NOP : "nop">
+| < IF : "if">
+| < WHILE : "while">
+| < FOR : "for"> 
+  
+}
+
+TOKEN:
+{
+	< LEFT : "#left" >
+| < RIGHT : "#right" >
+|  < AROUND : "#around" >
+
+}
+
+TOKEN:
+{
+	< NORTH : "#north" >
+| < EAST : "#east" >
+|  < SOUTH : "#south" >
+|  < WEST : "#west" >
+
+}
+
+TOKEN:
+{
+  < FRONT : "#front" >
+| < BACK : "#back" >
+}
+
+
+	//boolean command(uniandes.lym.robot.view.Console sistema) :
+	boolean command(Console sistema):
+	{	
+		
+		int x,y;
+		salida=new String();	
+	}
+
+	
+	{
+		(		proc()
+		)+
+
+    	| <EOF> {return false;} 
+	}
+
+	void put() :
+	{
+		int f=1;	
+	}
+	{
+		( <CHIPS>    "," f=num() {world.putChips(f); salida = "Command:  Put Chips"; })
+		|  	  ( <BALLOONS>   "," f=num() {world.putBalloons(f); salida = "Command:  Put Balloons";})	 
+
+	}
+
+	void get() :
+	{
+		int f=1;	
+	}
+	{
+		( <CHIPS>   "," f=num() {world.pickChips(f);salida = "Command:  Pick chips";})
+		|  	  ( <BALLOONS>   "," f=num() {world.grabBalloons(f);salida="Command:  Pick balloons";})	 
+
+	}
+
+	
+	
+
+	/**
+	 * Unsigned decimal number
+	 * @return the corresponding value of the string
+	 * @error  corresponding value is too large
+	 */
+
+	int num() throws Error:
+	{	
+		int total=1;
+	}
+	{
+		<NUM>
+		{
+			try 
+			{
+				total = Integer.parseInt(token.image);
+			} 
+			catch (NumberFormatException ee) 
+			{
+				throw new Error("Number out of bounds: "+token.image+" !!");
+			}
+			return total;
+		}
+	}
+
+	
+
+	void proc():
+	{}
+	{
+	  <PROC> identifier() parseDefBlock() {}
+	}
+
+	void parseDefBlock():
+	{String num = "";}
+	{ "["
+	(	  < GOTO > parseGoto()
+	| < MOVE > ":" (num = <NUM> | num = identifier()) ("toThe:" parseMoveToThe(false, map, num) | "inDir" parseMoveInDir(false, map, num)| "." parseMove(false, map, num))
+	| < TURN > parseTurn()
+	| < FACE > parseFace()
+	| < PUT > parsePut()
+	| < PICK > parsePick()
+	| < JUMP > ":" (num = <NUM> | num = identifier()) ("toThe:" parseJumpToThe(false, map, num) | "inDir" parseJumpInDir(false, map, num))
+	| < NOP > parseNop()	 /*| < IF > parseIf()
+	| < WHILE > parseWhile()
+	| < FOR > parseFor()*/
+	| < BALLOONS >
+	| < CHIPS >
+	| parseVariable() parseAsignacion()
+	)+ "]"
+	  
+	}
+
+	String identifier():
+	{
+	  Token t;
+	}
+	{
+	  t = <IDENTIFIER> { return t.image; }
+	}
+
+
+
+	void parseVariable():
+	{String nomVar = "";}
+	{
+	"|" nomVar = identifier() "|"
+	{
+	  variables.put(nomVar, null);
+	}
+	}
+
+	void parseAsignacion(HashMap<String, String> params):
+		{
+		 String nomVar = "";
+		 String valor = 0;
+		}
+		{
+		  nomVar = identifier()
+			{
+			  if (!variables.containsKey(nomVar)) {
+		      	System.out.println("La variable " + nomVar + " no ha sido definida.");
+		    	}
+			}
+		":="
+	
+		(valor = <NUM> | valor = identifier()) /*si es num se guarda en hash, si es identifier se busca en hash parametros*/
+	
+		{
+		    posX = validarYAsignar(valor, params);
+		}
+		"."
+		}
+
+	void parseGoto(boolean ejecucion, HashMap<String, String> params) :
+	{
+	    String posX = "";
+	    String posY = "";
+	}
+	{
+	    ":"
+	    (posX = <NUM> | posX = identifier()) 
+	    {
+			if (!ejecucion) { 
+	        posX = validarYParametrizar(posX, params); }
+	        else { 
+	        posX = validarYAsignar(posX, params); }
+	    }
+	    "with:"
+	    (posY = <NUM> | posY = identifier())
+	    {
+	      posY = validarYAsignar(posY, params);
+	    }
+	    "."
+	    {   
+	        if (ejecucion) {
+				ejecutarGoto();
+	        }
+	    }
+	    
+	}
+
+	void parseMove(boolean ejecucion, HashMap<String, String> params, String num) :
+	{	}
+	{
+	    {
+	        if (ejecucion) {
+				ejecutarMove();
+	        }
+	    }
+	    
+	}
+
+	void parseTurn(boolean ejecucion) :
+	{
+	    String D = "";
+	}
+	{
+	    ":"
+	    (D = <LEFT> | D = <RIGHT> | D = < AROUND >)
+	    "."
+	    {
+	        if (ejecucion) {
+				ejecutarTurn();
+	        }
+	    }
+	    
+	}
+
+	void parseFace(boolean ejecucion, HashMap<String, String> params) :
+	{
+	    String O = "";
+	}
+	{
+	    ":"
+	    (O = <NORTH> | O = <SOUTH> | O = <EAST> | O = <WEST>)
+	    "."
+	    {
+	        if (ejecucion) {
+				ejecutarFace();
+	        }
+	    }
+	    
+	}
+	
+
+
+	void parsePut(boolean ejecucion, HashMap<String, String> params) :
+	{
+	    String n = "";
+	    String X = "";
+	}
+	{
+	    ":"
+	    (n = <NUM> | n = identifier()) 
+	    {
+	        if (!ejecucion) { 
+	        n = validarYParametrizar(n, params); }
+	    }
+	    "ofType:"
+	    (X = <BALLOONS> | X = <CHIPS>)
+	    "."
+	    {
+			if (ejecucion) {
+				ejecutarPut();
+			  }
+	    }
+	    
+	}
+
+	void parsePick(boolean ejecucion, HashMap<String, String> params) :
+	{
+	    String n = "";
+	    String X = "";
+	}
+	{
+	    ":"
+	    (n = <NUM> | n = identifier()) 
+	    {
+	        if (!ejecucion) { 
+	        n = validarYParametrizar(n, params); }
+	    }
+	    "ofType:"
+	    (X = <BALLOONS> | X = <CHIPS>)
+	    "."
+	    {
+			if (ejecucion) {
+				ejecutarPick();
+			  }
+	    }
+	    
+	}
+
+	void parseMoveToThe(boolean ejecucion, HashMap<String, String> params, String num) :
+	{
+	    String D = "";
+	}
+	{
+	    (D = <BALLOONS> | D = <CHIPS>)
+	    "."
+	    {
+			if (ejecucion) {
+				ejecutarPut();
+			  }
+	    }
+	    
+	}
+
+	void parseMoveInDir(boolean ejecucion, HashMap<String, String> params, String num) :
+	{
+	    String O = "";
+	}
+	{
+	    (X = <NORTH> | X = <SOUTH> | X = <EAST> |X = <WEST>)
+	    "."
+	    {
+			if (ejecucion) {
+				ejecutarMoveInDir();
+			  }
+	    }
+	    
+	}
+
+	void parseJumpToThe(boolean ejecucion, HashMap<String, String> params, String num) :
+	{
+	    String D = "";
+	}
+	{
+	    (D = <FRONT> | D = <RIGHT> | D = <LEFT> | D = <BACK>)
+	    "."
+	    {
+			if (ejecucion) {
+				ejecutarMoveInDir();
+			  }
+	    }
+	    
+	}
+
+
+	void parseJumpInDir(boolean ejecucion, HashMap<String, String> params, String num) :
+	{
+	    String O = "";
+	}
+	{
+	    (D = <NORTH> | D = <EAST> | D = <WEST> | D = <SOUTH>)
+	    "."
+	    {
+			if (ejecucion) {
+				ejecutarMoveInDir();
+			  }
+	    }
+	    
+	}
+
+	void parseNop(boolean ejecucion):
+	{
+	}
+	{
+	  "nop."
+	}
+
+	void validarYParametrizar(String parametro, HashMap<String, String> params):
+	{ }
+    { { if (!variable.matches("\\d+")) {
+        if (params.containsKey(parametro)) {
+            throw new RuntimeException("El parametro " + parametro + " ya existe.");
+        }
+        else {
+            params.put(parametro, null);
+        }
+    }
+    return variable; }
+	}
+
+	String validarYAsignar(String variable, HashMap<String, String> params):
+	{ }
+    { { if (!variable.matches("\\d+")) {
+        if (!params.containsKey(variable)) {
+            throw new RuntimeException("La variable " + variable + " no existe.");
+        }
+        if (params.get(variable) == null) {
+            throw new RuntimeException("La variable " + variable + " no ha sido definida.");
+        }
+        else {
+            return params.get(variable);
+        }
+    }
+    return variable; }
+	}
+	
+
+    
+
+
+
+ 
+	
