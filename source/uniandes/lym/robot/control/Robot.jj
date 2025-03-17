@@ -247,7 +247,7 @@ TOKEN :
 	{String num = "";}
 	{ "["
 	(	  < GOTO > parseGoto(false)
-	| < MOVE > ":" (num = <NUM>.image | num = identifier()) ("toThe:" parseMoveToThe(false, num) | "inDir" parseMoveInDir(false, num)| "." parseMove(false, num))
+	| < MOVE > ":" (num = <NUM>.image | num = identifier()) ("toThe:" parseMoveToThe(false, num) | "inDir:" parseMoveInDir(false, num)| "." parseMove(false, num))
 	| < TURN > parseTurn(false)
 	| < FACE > parseFace(false)
 	| < PUT > parsePut(false)
@@ -419,10 +419,73 @@ TOKEN :
 	    "."
 	    {
 	        if (ejecucion) {
-				ejecutarFace();
+				ejecutarFace(O);
 	        }
 	    }
 	    
+	}
+
+	void ejecutarFace(String O):
+	{}
+	{
+	  { if (O.equals("#north")) {
+			faceNorthExec();
+	    }
+		else if (O.equals("#south")) {
+			faceSouthExec();
+	    }
+	    else if (O.equals("#east")) {
+			faceEastExec();
+	    }
+	    else if (O.equals("#west")) {
+			faceWestExec();
+	    }
+	     }
+	}
+
+	void faceNorthExec():
+	{}
+	{
+	   { if (world.facingWest())
+			{world.turnRight();}
+		else if (world.facingSouth())
+			{world.turnRight(); world.turnRight();}
+		else if (world.facingEast())
+			{world.turnRight(); world.turnRight(); world.turnRight();}
+		 } }
+
+	void faceSouthExec():
+	{ }
+	{
+	 {  if (world.facingNorth())
+			{world.turnRight(); world.turnRight();}
+		else if (world.facingEast())
+			{ world.turnRight();}
+		else if (world.facingWest())
+			{world.turnRight();world.turnRight();world.turnRight();}
+			 } 
+	}
+	
+	void faceEastExec():
+	{}
+	{
+	   { if (world.facingNorth())
+			{world.turnRight();}
+		else if (world.facingWest())
+			{world.turnRight();world.turnRight();}
+		else if (world.facingSouth())
+			{world.turnRight();world.turnRight();world.turnRight();}} 
+	}
+	
+	void faceWestExec():
+	{ }
+	{
+	   { if (world.facingNorth())
+			{ world.turnRight();world.turnRight();world.turnRight();}
+		else if (world.facingEast())
+			{world.turnRight();world.turnRight();}
+		else if (world.facingSouth())
+			{world.turnRight();}} 
 	}
 	
 
@@ -447,10 +510,26 @@ TOKEN :
 	    "."
 	    {
 			if (ejecucion) {
-				ejecutarPut();
+				ejecutarPut(n, X);
 			  }
 	    }
 	    
+	}
+
+	void ejecutarPut(String Nnum, String Xtype):
+	{}
+	{
+	  {int Nnumint = Integer.parseInt(Nnum);}
+	  {	if (Xtype.equals("#balloons")) {
+			for (int i = 0; i < Nnumint; i++) {
+			    world.putBalloon();
+			}
+		}
+		else if (Xtype.equals("#chips")) {
+			for (int i = 0; i < Nnumint; i++) {
+			    world.putChip();
+			}
+		} }
 	}
 
 	void parsePick(boolean ejecucion) :
@@ -473,10 +552,26 @@ TOKEN :
 	    "."
 	    {
 			if (ejecucion) {
-				ejecutarPick();
+				ejecutarPick(n, X);
 			  }
 	    }
 	    
+	}
+
+	void ejecutarPick(String Nnum, String Xtype):
+	{}
+	{
+	  {int Nnumint = Integer.parseInt(Nnum);}
+	  {	if (Xtype.equals("#balloons")) {
+			for (int i = 0; i < Nnumint; i++) {
+			    world.pickupBalloon();
+			}
+		}
+		else if (Xtype.equals("#chips")) {
+			for (int i = 0; i < Nnumint; i++) {
+			    world.pickupChip();
+			}
+		} }
 	}
 
 	void parseMoveToThe(boolean ejecucion, String num) :
@@ -484,15 +579,46 @@ TOKEN :
 	    String D = "";
 	}
 	{
-	    (D = <BALLOONS>.image | D = <CHIPS>.image)
+	    (D = <FRONT>.image | D = <RIGHT>.image | D = <LEFT>.image | D = <BACK>.image)
 	    "."
 	    {
 			if (ejecucion) {
-				ejecutarPut();
+				ejecutarMoveToThe(num, D);
 			  }
 	    }
 	    
 	}
+
+	void ejecutarMoveToThe(String num, String D) :
+	{}
+	{
+	    {
+	        int intnum = Integer.parseInt(num);
+	        
+	        if (D.equals("#front")) {
+	            world.moveForward(intnum, false);
+	        }
+	        else if (D.equals("#right")) {
+	            world.turnRight();
+	            world.moveForward(intnum, false);
+	            world.turnRight();world.turnRight();world.turnRight(); 
+	        }
+	        else if (D.equals("#left")) {
+	            world.turnRight();world.turnRight();world.turnRight();
+	            world.moveForward(intnum, false);
+	            world.turnRight(); 
+	        }
+	        else if (D.equals("#back")) {
+	            world.turnRight();world.turnRight();
+	            world.moveForward(intnum, false);
+	            world.turnRight();world.turnRight(); 
+	        }
+	        
+	        salida = "COMMAND: MOVE toThe " + D;
+	    }
+	}
+
+	
 
 	void parseMoveInDir(boolean ejecucion,String num) :
 	{
