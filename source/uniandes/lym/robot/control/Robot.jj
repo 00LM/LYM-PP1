@@ -37,8 +37,7 @@ import java.util.Vector;
 import java.util.LinkedList;
 import java.util.List;
 
-private static boolean skipExecution = false;
-private static List<Runnable> medioStack = null;
+
 
 
 @SuppressWarnings("serial")
@@ -48,7 +47,49 @@ public class Robot
 
 	private RobotWorldDec world;
 	private static Map<String,String > variables = new HashMap<String,String >();
-	
+
+	private static boolean skipExecution = false;
+	private static List<Runnable> medioStack = null;
+	//Verifica 
+	private int resolveNumber(String name) {
+    if (parametros.containsKey(name) && !name.matches("\\d+")) {
+        return Integer.parseInt(parametros.get(name));
+    } else if (variables.containsKey(name)) {
+        String val = variables.get(name);
+        if (val != null && val.matches("\\d+")) {
+            return Integer.parseInt(val);
+        }
+    }
+    System.out.println("La variable " + name + " no ha sido definida.");
+    return 0;
+}
+
+private String resolveRelativeDirection(String rel) {
+    String ori = world.getOrientation();
+    if (ori == null) return "";
+    ori = ori.toLowerCase();
+    rel = rel.toLowerCase();
+    if (rel.equals("#front")) return ori;
+    if (rel.equals("#back")) {
+        if (ori.equals("north")) return "south";
+        if (ori.equals("south")) return "north";
+        if (ori.equals("east")) return "west";
+        if (ori.equals("west")) return "east";
+    }
+    if (rel.equals("#left")) {
+        if (ori.equals("north")) return "west";
+        if (ori.equals("south")) return "east";
+        if (ori.equals("east")) return "north";
+        if (ori.equals("west")) return "south";
+    }
+    if (rel.equals("#right")) {
+        if (ori.equals("north")) return "east";
+        if (ori.equals("south")) return "west";
+        if (ori.equals("east")) return "south";
+        if (ori.equals("west")) return "north";
+    }
+    return ori;
+}
 	
 	void setWorld(RobotWorld w) {
 		world = (RobotWorldDec) w;	
@@ -110,7 +151,7 @@ TOKEN [IGNORE_CASE]:
 }
 
 
-}
+
 
 TOKEN: /*Istrucciones*/
 {
@@ -152,6 +193,7 @@ TOKEN:
 }
 
 
+
 	//boolean command(uniandes.lym.robot.view.Console sistema) :
 	boolean command(Console sistema):
 	{	
@@ -188,175 +230,9 @@ TOKEN:
 		|  	  ( <BALLOONS>   "," f=num() {world.grabBalloons(f);salida="Command:  Pick balloons";})	 
 
 	}
-//Verifica 
-private int resolveNumber(String name) {
-    if (parametros.containsKey(name) && !name.matches("\\d+")) {
-        return Integer.parseInt(parametros.get(name));
-    } else if (variables.containsKey(name)) {
-        String val = variables.get(name);
-        if (val != null && val.matches("\\d+")) {
-            return Integer.parseInt(val);
-        }
-    }
-    System.out.println("La variable " + name + " no ha sido definida.");
-    return 0;
-}
 
-private String resolveRelativeDirection(String rel) {
-    String ori = world.getOrientation();
-    if (ori == null) return "";
-    ori = ori.toLowerCase();
-    rel = rel.toLowerCase();
-    if (rel.equals("#front")) return ori;
-    if (rel.equals("#back")) {
-        if (ori.equals("north")) return "south";
-        if (ori.equals("south")) return "north";
-        if (ori.equals("east")) return "west";
-        if (ori.equals("west")) return "east";
-    }
-    if (rel.equals("#left")) {
-        if (ori.equals("north")) return "west";
-        if (ori.equals("south")) return "east";
-        if (ori.equals("east")) return "north";
-        if (ori.equals("west")) return "south";
-    }
-    if (rel.equals("#right")) {
-        if (ori.equals("north")) return "east";
-        if (ori.equals("south")) return "west";
-        if (ori.equals("east")) return "south";
-        if (ori.equals("west")) return "north";
-    }
-    return ori;
-}
 
-//Parsea
-void parseIf() :
-{
-    boolean cond;
-    boolean prevSkip;
-}
-{
-    <IF> ":" cond = parseCondition() <THEN> ":"
-    {
-        prevSkip = skipExecution;
-        skipExecution = skipExecution || !cond;
-    }
-    parseDefBlock()
-    {
-        skipExecution = prevSkip;
-    }
-    [ <ELSE> ":"
-      {
-          prevSkip = skipExecution;
-          skipExecution = skipExecution || cond;
-      }
-      parseDefBlock()
-      {
-          skipExecution = prevSkip;
-      }
-    ]
-}
-//Parseax2
-boolean parseCondition() :
-{
-    boolean result;
-    Token tok1, tok2;
-    int numVal;
-    String varName;
-}
-{
-    <FACING> ":" tok1 = (<NORTH> | <SOUTH> | <EAST> | <WEST>)
-    {
-        // verifica orientación
-        String dir = tok1.image;
-        result = world.getOrientation().equalsIgnoreCase(dir.replace("#", ""));
-    }
-  | <CANPUT> ":" ( numVal = num() | varName = identifier() ) "ofType:" tok1 = (<BALLOONS> | <CHIPS>)
-    {
-        int count = (varName != null) ? resolveNumber(varName) : numVal;
-        String type = tok1.image;
-        if (type.equalsIgnoreCase("#balloons")) {
-            result = world.canPutBalloons(count);
-        } else {
-            result = world.canPutChips(count);
-        }
-    }
-  | <CANPICK> ":" ( numVal = num() | varName = identifier() ) "ofType:" tok1 = (<BALLOONS> | <CHIPS>)
-    {
-        int count = (varName != null) ? resolveNumber(varName) : numVal;
-        String type = tok1.image;
-        if (type.equalsIgnoreCase("#balloons")) {
-            result = world.canPickBalloons(count);
-        } else {
-            result = world.canPickChips(count);
-        }
-    }
-  | <CANMOVE> ":" ( numVal = num() | varName = identifier() ) ( "inDir:" tok1 = (<NORTH> | <SOUTH> | <EAST> | <WEST>) | "toThe:" tok2 = (<FRONT> | <BACK> | <LEFT> | <RIGHT>) )
-    {
-        int steps = (varName != null) ? resolveNumber(varName) : numVal;
-        String targetDir;
-        if (tok1 != null) {
-            targetDir = tok1.image;
-        } else {
-            targetDir = resolveRelativeDirection(tok2.image);
-        }
-        result = world.canMove(steps, targetDir.replace("#", ""));
-    }
-  | <CANJUMP> ":" ( numVal = num() | varName = identifier() ) ( "inDir:" tok1 = (<NORTH> | <SOUTH> | <EAST> | <WEST>) | "toThe:" tok2 = (<FRONT> | <BACK> | <LEFT> | <RIGHT>) )
-    {
-        int steps = (varName != null) ? resolveNumber(varName) : numVal;
-        String targetDir;
-        if (tok1 != null) {
-            targetDir = tok1.image;
-        } else {
-            targetDir = resolveRelativeDirection(tok2.image);
-        }
-        result = world.canJump(steps, targetDir.replace("#", ""));
-    }
-  | <NOT> ":" result = parseCondition() { result = !result; }
-}
-{
-    return result;
-}
 
-void parseFor() :
-{
-    int count;
-    String varName;
-    List<Runnable> prevRecord;
-    boolean isSkipping;
-}
-{
-    <FOR> ":" ( count = num() | varName = identifier() ) <REP> <TIMES> ":"
-    {
-        if (varName != null) {
-            count = resolveNumber(varName);
-        }
-        isSkipping = skipExecution;
-        prevRecord = medioStack;
-        medioStack = isSkipping ? null : new ArrayList<>();
-    }
-    parseDefBlock()
-    {
-        List<Runnable> actions = medioStack;
-        medioStack = prevRecord;
-        if (!isSkipping) {
-            for (int i = 1; i < count; i++) {
-                for (Runnable action : actions) {
-                    action.run();
-                }
-            }
-        }
-    }
-}
-//Ta mal no la puebes
-void parseWhile() :
-{
-
-}
-{
-    <WHILE> "(" parseCondition() ")" parseBlock()
-}
 	/**
 	 * Unsigned decimal number
 	 * @return the corresponding value of the string
@@ -454,6 +330,97 @@ void parseWhile() :
 		}
 		"."
 		}
+	void parseFor() :
+{
+    int count;
+    String varName;
+    List<Runnable> prevRecord;
+    boolean isSkipping;
+}
+{
+    <FOR> ":" ( count = num() | varName = identifier() ) <REP> <TIMES> ":"
+    {
+        if (varName != null) {
+            count = resolveNumber(varName);
+        }
+        isSkipping = skipExecution;
+        prevRecord = medioStack;
+        medioStack = isSkipping ? null : new ArrayList<>();
+    }
+    parseDefBlock()
+    {
+        List<Runnable> actions = medioStack;
+        medioStack = prevRecord;
+        if (!isSkipping) {
+            for (int i = 1; i < count; i++) {
+                for (Runnable action : actions) {
+                    action.run();
+                }
+            }
+		}
+	}
+}
+
+boolean parseCondition() :
+{
+    boolean result;
+    Token tok1, tok2;
+    int numVal;
+    String varName;
+}
+{
+    <FACING> ":" (tok1 = <NORTH> | tok1 =<SOUTH> | tok1 =<EAST> | tok1 =<WEST>)
+    {
+        // verifica orientación
+        String dir = tok1.image;
+        result = world.getOrientation().equalsIgnoreCase(dir.replace("#", ""));
+    }
+  | <CANPUT> ":" ( numVal = num() | varName = identifier() ) "ofType:" (tok1 = <BALLOONS> | tok1 = <CHIPS>)
+    {
+        int count = (varName != null) ? resolveNumber(varName) : numVal;
+        String type = tok1.image;
+        if (type.equalsIgnoreCase("#balloons")) {
+            result = world.canPutBalloons(count);
+        } else {
+            result = world.canPutChips(count);
+        }
+    }
+  | <CANPICK> ":" ( numVal = num() | varName = identifier() ) "ofType:" (tok1 = <BALLOONS> | tok1 = <CHIPS>)
+    {
+        int count = (varName != null) ? resolveNumber(varName) : numVal;
+        String type = tok1.image;
+        if (type.equalsIgnoreCase("#balloons")) {
+            result = world.canPickBalloons(count);
+        } else {
+            result = world.canPickChips(count);
+        }
+    }
+  | <CANMOVE> ":" ( numVal = num() | varName = identifier() ) ( "inDir:" (tok1 = <NORTH> |tok1 = <SOUTH> |tok1 = <EAST> |tok1 = <WEST>) | "toThe:" (tok2 = <FRONT> |tok2 = <BACK> |tok2 = <LEFT> |tok2 = <RIGHT>) )
+    {
+        int steps = (varName != null) ? resolveNumber(varName) : numVal;
+        String targetDir;
+        if (tok1 != null) {
+            targetDir = tok1.image;
+        } else {
+            targetDir = resolveRelativeDirection(tok2.image);
+        }
+        result = world.canMove(steps, targetDir.replace("#", ""));
+    }
+  | <CANJUMP> ":" ( numVal = num() | varName = identifier() ) ( "inDir:" (tok1 = <NORTH> |tok1 = <SOUTH> |tok1 = <EAST> |tok1 = <WEST>) | "toThe:" (tok2 = <FRONT> |tok2= <BACK> |tok2= <LEFT> |tok2= <RIGHT>) )
+    {
+        int steps = (varName != null) ? resolveNumber(varName) : numVal;
+        String targetDir;
+        if (tok1 != null) {
+            targetDir = tok1.image;
+        } else {
+            targetDir = resolveRelativeDirection(tok2.image);
+        }
+        result = world.canJump(steps, targetDir.replace("#", ""));
+    }
+  | <NOT> ":" result = parseCondition() { result = !result; }
+  { return result; }
+} 
+
 
 	void parseGoto(boolean ejecucion, HashMap<String, String> params) :
 	{
@@ -493,6 +460,32 @@ void parseWhile() :
 	    }
 	    
 	}
+	void parseIf() :
+{
+    boolean cond;
+    boolean prevSkip;
+}
+{
+    <IF> ":" cond = parseCondition() <THEN> ":"
+    {
+        prevSkip = skipExecution;
+        skipExecution = skipExecution || !cond;
+    }
+    parseDefBlock()
+    {
+        skipExecution = prevSkip;
+    }
+    [ <ELSE> ":"
+      {
+          prevSkip = skipExecution;
+          skipExecution = skipExecution || cond;
+      }
+      parseDefBlock()
+      {
+          skipExecution = prevSkip;
+      }
+    ]
+}
 
 	void parseTurn(boolean ejecucion) :
 	{
