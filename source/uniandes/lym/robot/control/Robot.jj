@@ -241,7 +241,7 @@ void parseIf() :
         prevSkip = skipExecution;
         skipExecution = skipExecution || !cond;
     }
-    parseBlock()
+    parseDefBlock()
     {
         skipExecution = prevSkip;
     }
@@ -250,7 +250,7 @@ void parseIf() :
           prevSkip = skipExecution;
           skipExecution = skipExecution || cond;
       }
-      parseBlock()
+      parseDefBlock()
       {
           skipExecution = prevSkip;
       }
@@ -336,7 +336,7 @@ void parseFor() :
         prevRecord = medioStack;
         medioStack = isSkipping ? null : new ArrayList<>();
     }
-    parseBlock()
+    parseDefBlock()
     {
         List<Runnable> actions = medioStack;
         medioStack = prevRecord;
@@ -349,7 +349,14 @@ void parseFor() :
         }
     }
 }
+//Ta mal no la puebes
+void parseWhile() :
+{
 
+}
+{
+    <WHILE> "(" parseCondition() ")" parseBlock()
+}
 	/**
 	 * Unsigned decimal number
 	 * @return the corresponding value of the string
@@ -374,6 +381,7 @@ void parseFor() :
 			return total;
 		}
 	}
+	
 
 
 	
