@@ -38,6 +38,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 private static boolean skipExecution = false;
+private static List<Runnable> medioStack = null;
+
 
 @SuppressWarnings("serial")
 public class Robot 
@@ -317,6 +319,36 @@ boolean parseCondition() :
     return result;
 }
 
+void parseFor() :
+{
+    int count;
+    String varName;
+    List<Runnable> prevRecord;
+    boolean isSkipping;
+}
+{
+    <FOR> ":" ( count = num() | varName = identifier() ) <REP> <TIMES> ":"
+    {
+        if (varName != null) {
+            count = resolveNumber(varName);
+        }
+        isSkipping = skipExecution;
+        prevRecord = medioStack;
+        medioStack = isSkipping ? null : new ArrayList<>();
+    }
+    parseBlock()
+    {
+        List<Runnable> actions = medioStack;
+        medioStack = prevRecord;
+        if (!isSkipping) {
+            for (int i = 1; i < count; i++) {
+                for (Runnable action : actions) {
+                    action.run();
+                }
+            }
+        }
+    }
+}
 
 	/**
 	 * Unsigned decimal number
