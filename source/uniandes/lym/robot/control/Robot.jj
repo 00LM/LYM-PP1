@@ -47,6 +47,7 @@ public class Robot
 	private RobotWorldDec world;
 	private static HashMap<String,String > variablesH = new HashMap<String,String >();
 	private static ArrayList<String> parametrosH = new ArrayList<String>();
+	private static HashMap<String, ArrayList<Token>> funciones = new HashMap<String, ArrayList<Token>>();
 	private static ArrayList<String> globales =  new ArrayList<String>();
 	
 	
@@ -56,6 +57,27 @@ public class Robot
 
 	String salida=new String();
 }
+
+class ListTokenManager extends RobotTokenManager {
+	    private List<Token> tokens;
+	    private int index = 0;
+	
+	    public ListTokenManager(List<Token> tokens) {
+	        super(null);
+	        this.tokens = tokens;
+	    }
+	
+	    @Override
+	    public Token getNextToken() {
+	        if (index < tokens.size()) {
+	            return tokens.get(index++);
+	        } else {
+	            Token eof = new Token();
+	            eof.kind = 0; 
+	            return eof;
+	        }
+	    }
+	}
 
 PARSER_END(Robot)
 
@@ -239,10 +261,12 @@ TOKEN :
 	{
 	    String param = "";
 	    String paramKey = "";
+	    String nombreFuncion = "";
 	}
 	{
 	    <PROC> 
-	    identifier()
+	    nombreFuncion = identifier()
+	    { funciones.put(nombreFuncion, new ArrayList<>()); }
 	    (
 	      {System.out.println("Tengo parámetros");}
 	        ":"
@@ -258,14 +282,24 @@ TOKEN :
 	        ))*
 	    )?
 	    {System.out.println("Lista de parámetros: " + parametrosH);}
-	    parseDefBlock()
+	    parseDefBlock(nombreFuncion)
 	    
 	}
 
 
-	void parseDefBlock():
-	{String num = "";}
+	void parseDefBlock(String nombreFuncion):
+	{String num = "";
+	ArrayList<Token> tokens = new ArrayList<>();}
 	{ "["
+	{
+        Token t;
+        while (true) {
+            t = getNextToken();
+            if (t.image == " [") break;  
+            tokens.add(t);
+        }
+        funciones.put(nombreFuncion, tokens);
+    }
 	(	parseGoto(false)
 	| anteparseMove(false)
 	| parseTurn(false) 
@@ -286,21 +320,18 @@ TOKEN :
 	}
 	}
 
-	
-
-	
 	void parseCodeBlock():
-	{String num = "";}
+	{}
 	{ "["
 	(
-	parseGoto(false)
-	| anteparseMove(false)
-	| parseTurn(false) 
-	| parseFace(false) 
-	| parsePut(false)
-	| parsePick(false) 
-	| anteparseJump(false) 
-	| parseNop(false) 
+	parseGoto(true)
+	| anteparseMove(true)
+	| parseTurn(true) 
+	| parseFace(true) 
+	| parsePut(true)
+	| parsePick(true) 
+	| anteparseJump(true) 
+	| parseNop(true) 
 	/*| < IF > parseIf()
 	| < WHILE > parseWhile()
 	| < FOR > parseFor()*/
@@ -756,14 +787,14 @@ TOKEN :
 
 	void parseJumpInDir(boolean ejecucion, String num) :
 	{
-	    String O = "";
+	    String D = "";
 	}
 	{
 	    (D = <NORTH>.image | D = <EAST>.image | D = <WEST>.image | D = <SOUTH>.image)
 	    "."
 	    {
 			if (ejecucion) {
-				ejecutarjumpInDir(num, O);
+				ejecutarjumpInDir(num, D);
 			  }
 	    }
 	    
@@ -850,7 +881,7 @@ TOKEN :
 	  }
 	}
 
-	void parseCondition(boolean ejecucion, boolean isWhile, ArrayList <String> funciones) :
+	void parseCondition(boolean ejecucion, boolean isWhile, String nomFuncion) :
 	{
 	    String tok1 = "";
 	    String num = "";
@@ -859,62 +890,112 @@ TOKEN :
 	{
 	    <FACING> ":" (tok1 = <NORTH>.image | tok1 =<SOUTH>.image | tok1 =<EAST>.image | tok1 =<WEST>.image) "."
 	    {
-	      	int condInt = 1;
-	        execConditional(tok1, num, conInt, isWhile);
+	      	if (ejecucion) { 
+	      	condInt = 1;
+	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
 	    }
 	    
 	   /////
 	  | <CANPUT> ":" ( num = < NUM >.image | num = identifier() { validarParam(num); } ) "ofType:" (tok1 = <BALLOONS>.image | tok1 = <CHIPS>.image) "."
 	    {
-	        int condInt = 2;
-	        execConditional(tok1, num, conInt, isWhile);
+	      	if (ejecucion) { 
+	        condInt = 2;
+	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
 	    }
 	   /////
 	  | <CANPICK> ":" ( num = < NUM >.image | num = identifier() { validarParam(num); } ) "ofType:" (tok1 = <BALLOONS>.image | tok1 = <CHIPS>.image) "."
 	    {
-	        int condInt = 3;
-	        execConditional(tok1, num, conInt, isWhile);
+			if (ejecucion) { 
+	        condInt = 3;
+	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
 	    }
 	  /////
 	  | <CANMOVE> ":" ( num = < NUM >.image | num = identifier() { validarParam(num); } )
 	  ( "inDir:" (tok1 = <NORTH>.image |tok1 = <SOUTH>.image |tok1 = <EAST>.image |tok1 = <WEST>.image) | "toThe:" (tok1 = <FRONT>.image |tok1 = <BACK>.image |tok1 = <LEFT>.image |tok1 = <RIGHT>.image) ) "."
 	    {
-	        int condInt = 4;
-	        execConditional(tok1, num, conInt, isWhile);
+	      	if (ejecucion) { 
+	        condInt = 4;
+	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
 	    }
 	  /////
 	  | <CANJUMP> ":" ( num = < NUM >.image | num = identifier() { validarParam(num); } )
 	  ( "inDir:" (tok1 = <NORTH>.image |tok1 = <SOUTH>.image |tok1 = <EAST>.image |tok1 = <WEST>.image) | "toThe:" (tok1 = <FRONT>.image |tok1 = <BACK>.image |tok1 = <LEFT>.image |tok1 = <RIGHT>.image) ) "."
 	    {
-	        int condInt = 5;
-	        execConditional(tok1, num, conInt, isWhile);
+	      	if (ejecucion) { 
+	        condInt = 5;
+	        execConditional(tok1, num, condInt, isWhile, nomFuncion); }
 	    }
 	   ////
 	  | <NOT> ":"
 		  {
-		    parseCondition(ejecucion, isWhile, funciones);
+		    parseCondition(ejecucion, isWhile, nomFuncion);
 		  }
 	}
 
-	void execConditional(String tok1, String num, int conInt, bool isWhile):
+	void execConditional(String tok1, String num, int condInt, boolean isWhile, String nomFuncion):
 	{}
 	{
 	  {
-	    if (num.equals("") && num == 1) { //es facing 
-			if (facingToInt(tok1).equals(world.getFacing())) {
-				if (iswhile) {
-					
+	    if (num.equals("") && condInt == 1) { //es facing
+			if (facingToInt(tok1) == world.getFacing()) {
+				if (isWhile) {
+					parseWhile(true, nomFuncion);
 				  }
 			}
 	    }
 	 }
 	}
 
-	void parseWhile(boolean ejecucion):
+	void parseWhile(boolean ejecucion, String nombreFuncion):
 	{}
 	{
-		< WHILE > ":" {parseCondition(ejecucion, true, funciones);} "do:" { parseDefBlock();}
+		< WHILE > ":" {parseCondition(ejecucion, true, nombreFuncion);} "do:" { parseDefBlock(nombreFuncion);}
 	}
+
+	void callFunction():
+	{
+	    String nombreFuncion = "";
+	}
+	{
+	    nombreFuncion = identifier()
+	    {
+	        if (funciones.containsKey(nombreFuncion)) {
+	            executeFunction(nombreFuncion);
+	        } else {
+	            System.out.println("Error: La función " + nombreFuncion + " no está definida.");
+	            throw new ParseException("La función " + nombreFuncion + " no existe.");
+	        }
+	    }
+	}
+
+	void executeFunction(String nombreFuncion):
+	{}
+	{
+	    {
+	      if (funciones.containsKey(nombreFuncion)) {
+	        List<Token> tokens = funciones.get(nombreFuncion);
+	
+	        RobotTokenManager oldManager = token_source;
+	        token_source = new ListTokenManager(tokens);
+	
+	        try {
+	            parseCodeBlock();
+	        } finally {
+	            token_source = oldManager;
+	        }
+	    } else {
+	        System.out.println("Error: Función " + nombreFuncion + " no está definida.");
+	    }
+	 	}
+	}
+
+	
+	
+
+	
+
+	
+		
 	
 
 
