@@ -48,7 +48,47 @@ public class Robot
 	private static HashMap<String,String > variablesH = new HashMap<String,String >();
 	private static ArrayList<String> parametrosH = new ArrayList<String>();
 	private static ArrayList<String> globales =  new ArrayList<String>();
-	
+	private static boolean skipExecution = false;
+	private static List<Runnable> medioStack = null;
+	//Verifica 
+	private int resolveNumber(String name) {
+    if (parametros.containsKey(name) && !name.matches("\\d+")) {
+        return Integer.parseInt(parametros.get(name));
+    } else if (variables.containsKey(name)) {
+        String val = variables.get(name);
+        if (val != null && val.matches("\\d+")) {
+            return Integer.parseInt(val);
+        }
+    }
+    System.out.println("La variable " + name + " no ha sido definida.");
+    return 0;
+}
+	private String resolveRelativeDirection(String rel) {
+	    String ori = world.getOrientation();
+	    if (ori == null) return "";
+	    ori = ori.toLowerCase();
+	    rel = rel.toLowerCase();
+	    if (rel.equals("#front")) return ori;
+	    if (rel.equals("#back")) {
+	        if (ori.equals("north")) return "south";
+	        if (ori.equals("south")) return "north";
+	        if (ori.equals("east")) return "west";
+	        if (ori.equals("west")) return "east";
+	    }
+	    if (rel.equals("#left")) {
+	        if (ori.equals("north")) return "west";
+	        if (ori.equals("south")) return "east";
+	        if (ori.equals("east")) return "north";
+	        if (ori.equals("west")) return "south";
+	    }
+	    if (rel.equals("#right")) {
+	        if (ori.equals("north")) return "east";
+	        if (ori.equals("south")) return "west";
+	        if (ori.equals("east")) return "south";
+	        if (ori.equals("west")) return "north";
+	    }
+	    return ori;
+	}
 	
 	void setWorld(RobotWorld w) {
 		world = (RobotWorldDec) w;	
