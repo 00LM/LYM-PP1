@@ -16,7 +16,8 @@ options
 	LOOKAHEAD=1; 
 	IGNORE_CASE=true;
 	STATIC = false;
-	
+    DEBUG_PARSER = true;
+    
 }
    
 
@@ -44,7 +45,8 @@ public class Robot
 
 
 	private RobotWorldDec world;
-	private static Map<String,String > variables = new HashMap<String,String >();
+	private static HashMap<String,String > variablesH = new HashMap<String,String >();
+	private static HashMap<String,String > parametrosH = new HashMap<String,String >();
 	
 	
 	void setWorld(RobotWorld w) {
@@ -72,21 +74,6 @@ TOKEN:
 
 }
 
-TOKEN:
-{
-  < PROC: "proc" >
-| < LOWER: ["a"-"z"] >
-| < LETTER: ["A"-"Z"] | ["a"-"z"] >
-}
-
-TOKEN : 
-{
-  < IDENTIFIER: ["a"-"z", "A"-"Z"] (["a"-"z", "A"-"Z", "0"-"9"])* >
-  | < NUM: (["1"-"9"] ["0"-"9"])+ | "0" >
-}
-
-
-
 
 
 TOKEN [IGNORE_CASE]:
@@ -98,8 +85,16 @@ TOKEN [IGNORE_CASE]:
 | < REP : "REP" >
 | < PER : "PER" >
 | < TIMES: "TIMES" >
-
+| <FACING: "facing"> 
+| <CANPUT: "canPut"> 
+| <CANPICK: "canPick"> 
+| <CANMOVE: "canMove"> 
+| <CANJUMP: "canJump"> 
+| <NOT: "not">
 }
+
+
+
 
 TOKEN: /*Istrucciones*/
 {
@@ -140,6 +135,22 @@ TOKEN:
 | < BACK : "#back" >
 }
 
+TOKEN:
+{
+  < PROC: "proc" >
+| < LOWER: ["a"-"z"] >
+| < LETTER: ["A"-"Z"] | ["a"-"z"] >
+}
+
+TOKEN : 
+{
+  < IDENTIFIER: ["a"-"z", "A"-"Z"] (["a"-"z", "A"-"Z", "0"-"9"])* >
+  | < NUM: (["0"-"9"])+  >
+}
+
+
+
+
 
 	//boolean command(uniandes.lym.robot.view.Console sistema) :
 	boolean command(Console sistema):
@@ -151,11 +162,23 @@ TOKEN:
 
 	
 	{
-		(		proc()
-		)+
+		(		(proc())*
+		| (parseVariable())
+		| "[" parseCodeBlock()
+    	{
+		    try {
+	    			 Thread.sleep(900);
+	    	    } catch (InterruptedException e) {
+	    			        System.err.format("IOException: %s%n", e);
+	    		    }
+	    			 
+			sistema.printOutput(salida);
+			return true;
+		})+
 
     	| <EOF> {return false;} 
 	}
+	
 
 	void put() :
 	{
@@ -210,20 +233,43 @@ TOKEN:
 	void proc():
 	{}
 	{
-	  <PROC> identifier() parseDefBlock() {}
+	  <PROC> 
+	  identifier() 
+	  parseDefBlock() 
 	}
 
 	void parseDefBlock():
 	{String num = "";}
 	{ "["
-	(	  < GOTO > parseGoto()
-	| < MOVE > ":" (num = <NUM> | num = identifier()) ("toThe:" parseMoveToThe(false, map, num) | "inDir" parseMoveInDir(false, map, num)| "." parseMove(false, map, num))
-	| < TURN > parseTurn()
-	| < FACE > parseFace()
-	| < PUT > parsePut()
-	| < PICK > parsePick()
-	| < JUMP > ":" (num = <NUM> | num = identifier()) ("toThe:" parseJumpToThe(false, map, num) | "inDir" parseJumpInDir(false, map, num))
-	| < NOP > parseNop()	 /*| < IF > parseIf()
+	(	  < GOTO > parseGoto(false)
+	| < MOVE > ":" (num = <NUM>.image | num = identifier()) ("toThe:" parseMoveToThe(false, num) | "inDir" parseMoveInDir(false, num)| "." parseMove(false, num))
+	| < TURN > parseTurn(false)
+	| < FACE > parseFace(false)
+	| < PUT > parsePut(false)
+	| < PICK > parsePick(false)
+	| < JUMP > ":" (num = <NUM>.image | num = identifier()) ("toThe:" parseJumpToThe(false, num) | "inDir" parseJumpInDir(false, num))
+	| < NOP > parseNop(false)	 /*| < IF > parseIf()
+	| < WHILE > parseWhile()
+	| < FOR > parseFor()*/
+	| < BALLOONS >
+	| < CHIPS >
+	| parseVariable() parseAsignacion()
+	)+ "]"
+	}
+
+	void parseCodeBlock():
+	{String num = "";}
+	{ "["
+	(
+	  < GOTO > parseGoto(true)
+	| < MOVE > ":" (num = <NUM>.image | num = identifier()) ("toThe:" parseMoveToThe(true, num) | "inDir" parseMoveInDir(true, num)| "." parseMove(true, num))
+	| < TURN > parseTurn(true)
+	| < FACE > parseFace(true)
+	| < PUT > parsePut(true)
+	| < PICK > parsePick(true)
+	| < JUMP > ":" (num = <NUM>.image | num = identifier()) ("toThe:" parseJumpToThe(true, num) | "inDir" parseJumpInDir(true, num))
+	| < NOP > parseNop(true)
+	 /*| < IF > parseIf()
 	| < WHILE > parseWhile()
 	| < FOR > parseFor()*/
 	| < BALLOONS >
@@ -248,61 +294,71 @@ TOKEN:
 	{
 	"|" nomVar = identifier() "|"
 	{
-	  variables.put(nomVar, null);
+	  variablesH.put(nomVar, null);
 	}
 	}
 
-	void parseAsignacion(HashMap<String, String> params):
+	void parseAsignacion():
 		{
 		 String nomVar = "";
-		 String valor = 0;
+		 String valor = "";
 		}
 		{
 		  nomVar = identifier()
 			{
-			  if (!variables.containsKey(nomVar)) {
+			  if (!variablesH.containsKey(nomVar)) {
 		      	System.out.println("La variable " + nomVar + " no ha sido definida.");
 		    	}
 			}
 		":="
-	
-		(valor = <NUM> | valor = identifier()) /*si es num se guarda en hash, si es identifier se busca en hash parametros*/
-	
+		(valor = <NUM>.image | valor = identifier()) /*si es num se guarda en hash, si es identifier se busca en hash parametros*/
 		{
-		    posX = validarYAsignar(valor, params);
+		    valor = validarYAsignar(valor);
 		}
 		"."
 		}
 
-	void parseGoto(boolean ejecucion, HashMap<String, String> params) :
+	void parseGoto(boolean ejecucion) :
 	{
 	    String posX = "";
 	    String posY = "";
 	}
 	{
 	    ":"
-	    (posX = <NUM> | posX = identifier()) 
+	    (posX = <NUM>.image | posX = identifier()) 
 	    {
 			if (!ejecucion) { 
-	        posX = validarYParametrizar(posX, params); }
+	        validarYParametrizar(posX); }
 	        else { 
-	        posX = validarYAsignar(posX, params); }
+	        posX = validarYAsignar(posX); }
 	    }
 	    "with:"
-	    (posY = <NUM> | posY = identifier())
+	    (posY = <NUM>.image | posY = identifier())
 	    {
-	      posY = validarYAsignar(posY, params);
+	      if (!ejecucion) { 
+	      validarYParametrizar(posY); }
+	      else { 
+	      posY = validarYAsignar(posY); }
 	    }
 	    "."
 	    {   
 	        if (ejecucion) {
-				ejecutarGoto();
+				ejecutarGoto(posX,posY);
 	        }
 	    }
 	    
 	}
 
-	void parseMove(boolean ejecucion, HashMap<String, String> params, String num) :
+	void ejecutarGoto(String x, String y):
+	{}
+	{
+	  { int intx = Integer.parseInt(x);
+	  int inty = Integer.parseInt(y); }
+	  {world.setPostion(intx,inty); salida = "COMMAND: goTo";}
+	}
+
+
+	void parseMove(boolean ejecucion, String num) :
 	{	}
 	{
 	    {
@@ -319,7 +375,7 @@ TOKEN:
 	}
 	{
 	    ":"
-	    (D = <LEFT> | D = <RIGHT> | D = < AROUND >)
+	    (D = <LEFT>.image | D = <RIGHT>.image | D = <AROUND>.image)
 	    "."
 	    {
 	        if (ejecucion) {
@@ -329,13 +385,13 @@ TOKEN:
 	    
 	}
 
-	void parseFace(boolean ejecucion, HashMap<String, String> params) :
+	void parseFace(boolean ejecucion) :
 	{
 	    String O = "";
 	}
 	{
 	    ":"
-	    (O = <NORTH> | O = <SOUTH> | O = <EAST> | O = <WEST>)
+	    (O = <NORTH>.image | O = <SOUTH>.image | O = <EAST>.image | O = <WEST>.image)
 	    "."
 	    {
 	        if (ejecucion) {
@@ -347,20 +403,23 @@ TOKEN:
 	
 
 
-	void parsePut(boolean ejecucion, HashMap<String, String> params) :
+	void parsePut(boolean ejecucion) :
 	{
 	    String n = "";
 	    String X = "";
 	}
 	{
 	    ":"
-	    (n = <NUM> | n = identifier()) 
+	    (n = <NUM>.image | n = identifier()) 
 	    {
 	        if (!ejecucion) { 
-	        n = validarYParametrizar(n, params); }
+	        validarYParametrizar(n); }
+	        else {
+			n = validarYAsignar(n);
+	          }
 	    }
 	    "ofType:"
-	    (X = <BALLOONS> | X = <CHIPS>)
+	    (X = <BALLOONS>.image | X = <CHIPS>.image)
 	    "."
 	    {
 			if (ejecucion) {
@@ -370,20 +429,23 @@ TOKEN:
 	    
 	}
 
-	void parsePick(boolean ejecucion, HashMap<String, String> params) :
+	void parsePick(boolean ejecucion) :
 	{
 	    String n = "";
 	    String X = "";
 	}
 	{
 	    ":"
-	    (n = <NUM> | n = identifier()) 
+	    (n = <NUM>.image | n = identifier()) 
 	    {
 	        if (!ejecucion) { 
-	        n = validarYParametrizar(n, params); }
+	        validarYParametrizar(n); }
+	        else {
+			n = validarYAsignar(n);
+	          }
 	    }
 	    "ofType:"
-	    (X = <BALLOONS> | X = <CHIPS>)
+	    (X = <BALLOONS>.image | X = <CHIPS>.image)
 	    "."
 	    {
 			if (ejecucion) {
@@ -393,12 +455,12 @@ TOKEN:
 	    
 	}
 
-	void parseMoveToThe(boolean ejecucion, HashMap<String, String> params, String num) :
+	void parseMoveToThe(boolean ejecucion, String num) :
 	{
 	    String D = "";
 	}
 	{
-	    (D = <BALLOONS> | D = <CHIPS>)
+	    (D = <BALLOONS>.image | D = <CHIPS>.image)
 	    "."
 	    {
 			if (ejecucion) {
@@ -408,12 +470,12 @@ TOKEN:
 	    
 	}
 
-	void parseMoveInDir(boolean ejecucion, HashMap<String, String> params, String num) :
+	void parseMoveInDir(boolean ejecucion,String num) :
 	{
 	    String O = "";
 	}
 	{
-	    (X = <NORTH> | X = <SOUTH> | X = <EAST> |X = <WEST>)
+	    (X = <NORTH>.image | X = <SOUTH>.image | X = <EAST>.image |X = <WEST>.image)
 	    "."
 	    {
 			if (ejecucion) {
@@ -423,12 +485,12 @@ TOKEN:
 	    
 	}
 
-	void parseJumpToThe(boolean ejecucion, HashMap<String, String> params, String num) :
+	void parseJumpToThe(boolean ejecucion,String num) :
 	{
 	    String D = "";
 	}
 	{
-	    (D = <FRONT> | D = <RIGHT> | D = <LEFT> | D = <BACK>)
+	    (D = <FRONT>.image | D = <RIGHT>.image | D = <LEFT>.image | D = <BACK>.image)
 	    "."
 	    {
 			if (ejecucion) {
@@ -439,12 +501,12 @@ TOKEN:
 	}
 
 
-	void parseJumpInDir(boolean ejecucion, HashMap<String, String> params, String num) :
+	void parseJumpInDir(boolean ejecucion, String num) :
 	{
 	    String O = "";
 	}
 	{
-	    (D = <NORTH> | D = <EAST> | D = <WEST> | D = <SOUTH>)
+	    (D = <NORTH>.image | D = <EAST>.image | D = <WEST>.image | D = <SOUTH>.image)
 	    "."
 	    {
 			if (ejecucion) {
@@ -461,34 +523,104 @@ TOKEN:
 	  "nop."
 	}
 
-	void validarYParametrizar(String parametro, HashMap<String, String> params):
+	void validarYParametrizar(String parametro) :
 	{ }
-    { { if (!variable.matches("\\d+")) {
-        if (params.containsKey(parametro)) {
-            throw new RuntimeException("El parametro " + parametro + " ya existe.");
-        }
-        else {
-            params.put(parametro, null);
-        }
-    }
-    return variable; }
+	{
+	    {
+	        if (!parametro.matches("\\d+")) {
+	            if (parametrosH.containsKey(parametro)) {
+	                throw new RuntimeException("El parametro " + parametro + " ya existe.");
+	            } else {
+	                parametrosH.put(parametro, null);
+	            }
+	        }
+	    }
 	}
 
-	String validarYAsignar(String variable, HashMap<String, String> params):
+
+	String validarYAsignar(String variable) :
 	{ }
-    { { if (!variable.matches("\\d+")) {
-        if (!params.containsKey(variable)) {
-            throw new RuntimeException("La variable " + variable + " no existe.");
-        }
-        if (params.get(variable) == null) {
-            throw new RuntimeException("La variable " + variable + " no ha sido definida.");
-        }
-        else {
-            return params.get(variable);
-        }
-    }
-    return variable; }
+	{
+	    {
+	        if (!variable.matches("\\d+")) {
+	            if (!variablesH.containsKey(variable)) {
+	              
+	              throw new RuntimeException("La variable " + variable + " no existe.");
+	            }
+	            if (variablesH.get(variable) == null) {
+	                throw new RuntimeException("La variable " + variable + " no ha sido definida.");
+	            }
+	            return variablesH.get(variable); 
+	        } 
+	        else { return variable; }
+	    }
 	}
+
+
+
+
+
+	void parseCondition() :
+	{
+	    boolean result;
+	    Token tok1, tok2;
+	    int numVal;
+	    String varName;
+	}
+	{
+    	<FACING> ":"
+    	(tok1 =<NORTH> | tok1 =<SOUTH> | tok1 =<EAST> | tok1 =<WEST>)
+	    {
+	        String dir = tok1.image;
+	        result = world.getOrientation().equalsIgnoreCase(dir.replace("#", ""));
+	    }
+  		| <CANPUT> ":" ( numVal = num() | varName = identifier() ) "ofType:"  (tok1 =<BALLOONS> | tok1 =<CHIPS>)
+	    {
+	        int count = (varName != null) ? resolveNumber(varName) : numVal;
+	        String type = tok1.image;
+	        if (type.equalsIgnoreCase("#balloons")) {
+	            result = world.canPutBalloons(count);
+	        } else {
+	            result = world.canPutChips(count);
+	        }
+	    }
+  		| <CANPICK> ":" ( numVal = num() | varName = identifier() ) "ofType:"  (tok1 =<BALLOONS> | tok1 =<CHIPS>)
+	    {
+	        int count = (varName != null) ? resolveNumber(varName) : numVal;
+	        String type = tok1.image;
+	        if (type.equalsIgnoreCase("#balloons")) {
+	            result = world.canPickBalloons(count);
+	        } else {
+	            result = world.canPickChips(count);
+	        }
+	    }
+  		| <CANMOVE> ":" ( numVal = num() | varName = identifier() ) ( "inDir:"  (tok1 =<NORTH> | tok1 =<SOUTH> | tok1 =<EAST> | tok1 =<WEST>)
+  		| "toThe:"  (tok2 =<FRONT> | tok2 =<BACK> | tok2 =<LEFT> | tok2 =<RIGHT>) )
+	    {
+	        int steps = (varName != null) ? resolveNumber(varName) : numVal;
+	        String targetDir;
+	        if (tok1 != null) {
+	            targetDir = tok1.image;
+	        } else {
+	            targetDir = resolveRelativeDirection(tok2.image);
+	        }
+	        result = world.canMove(steps, targetDir.replace("#", ""));
+	    }
+  		| <CANJUMP> ":" ( numVal = num() | varName = identifier() ) ( "inDir:"  (tok1 =<NORTH> | tok1 =<SOUTH> | tok1 =<EAST> | tok1 =<WEST>)
+  		| "toThe:"  (tok2 =<FRONT> | tok2 =<BACK> | tok2 =<LEFT> | tok2 =<RIGHT>) )
+	    {
+	        int steps = (varName != null) ? resolveNumber(varName) : numVal;
+	        String targetDir;
+	        if (tok1 != null) {
+	            targetDir = tok1.image;
+	        } else {
+	            targetDir = resolveRelativeDirection(tok2.image);
+	        }
+	        result = world.canJump(steps, targetDir.replace("#", ""));
+	    }
+  		| <NOT> ":" result = parseCondition() { result = !result; }
+	}
+	
 	
 
     
