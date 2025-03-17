@@ -162,22 +162,27 @@ TOKEN :
 
 	
 	{
-		(		(proc())*
-		| (parseVariable())
-		| "[" parseCodeBlock()
-    	{
-		    try {
-	    			 Thread.sleep(900);
-	    	    } catch (InterruptedException e) {
-	    			        System.err.format("IOException: %s%n", e);
-	    		    }
-	    			 
-			sistema.printOutput(salida);
-			return true;
-		})+
+    (
+    inicial()
+    {
+        try {
+            Thread.sleep(900);
+        } catch (InterruptedException e) {
+            System.err.format("IOException: %s%n", e);
+        }
+        sistema.printOutput(salida);
+        return true;
+    })+
 
-    	| <EOF> {return false;} 
+    | <EOF> { return false; }
 	}
+
+
+	void inicial():
+	{}
+	{
+	  	(proc()| parseVariable()| parseCodeBlock())+
+	} 
 	
 
 	void put() :
@@ -363,10 +368,17 @@ TOKEN :
 	{
 	    {
 	        if (ejecucion) {
-				ejecutarMove();
+				ejecutarMove(num);
 	        }
 	    }
 	    
+	}
+
+	void ejecutarMove(String num):
+	{}
+	{
+	  { int intnum = Integer.parseInt(num); }
+	  { world.moveForward(intnum,false); salida = "COMMAND: MOVE"; }
 	}
 
 	void parseTurn(boolean ejecucion) :
@@ -379,10 +391,22 @@ TOKEN :
 	    "."
 	    {
 	        if (ejecucion) {
-				ejecutarTurn();
+				ejecutarTurn(D);
 	        }
 	    }
 	    
+	}
+
+	void ejecutarTurn(String D):
+	{}
+	{ 
+	  { if (D.equals("#left"))
+			  {world.turnRight(); world.turnRight();world.turnRight();}
+		else if (D.equals("#right"))
+			  {world.turnRight();}
+		else
+			{world.turnRight(); world.turnRight();}
+	}
 	}
 
 	void parseFace(boolean ejecucion) :
