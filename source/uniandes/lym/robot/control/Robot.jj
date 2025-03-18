@@ -1106,34 +1106,36 @@ TOKEN : {
 
 
 	void parseWhile(boolean ejecucion, String nombreFuncion):
-	{Token startToken;
-	boolean condicion; }
-	{
-		< WHILE > ":"
-		{ 
-			startToken = getToken(1);
-			condicion = parseCondition(ejecucion, true, nombreFuncion);
+		{
+		    boolean condition;
+		    Token startToken;
+		    Token conditionToken;
 		}
-		"do:" 
-		{ 
-			if (ejecucion) {
-				System.out.println(ejecucion + "PRINTEANDO EJEC");
-				while (condicion) {  
-					token = startToken; // Reiniciar análisis desde startToken
-					condicion = parseCondition(ejecucion, true, nombreFuncion); 
-					if (!condicion) break;
-					parseCodeBlock(); 
-				}
-			} 
-			else {
-			  if (ejecucion) {
-			    parseCodeBlock();
-			    }
-			   else { parseDefBlock(); }
-				 
-			}
+		{
+		    < WHILE > ":" 
+		    { 
+		        conditionToken = token; 
+		        condition = parseCondition(); 
+		    } 
+		    "do:" 
+		    {
+		        if (ejecucion) {
+		            startToken = token; 
+		            while (condition) {
+		                token = startToken; 
+		                parseCodeBlock(); 
+		                token = conditionToken; 
+		                condition = parseCondition(); 
+		            }
+		        }
+		        else { 
+		            parseDefBlock(); 
+		        }
+		    }
 		}
-	}
+
+
+	
 
 
 	void callFunction():
